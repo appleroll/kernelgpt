@@ -214,7 +214,7 @@ void backward(Value* root) {
 }
 
 // Matrix 
-// I don't think NanoGPT uses Matrixes, but I think matrixes are pretty cool and a good thing to have.
+// I don't think MicroGPT uses Matrixes, but I think matrixes are pretty cool and a good thing to have.
 typedef struct {
     int rows;
     int cols;
