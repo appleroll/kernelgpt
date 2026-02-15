@@ -31,7 +31,6 @@ void enable_fpu() {
 
 void kernel_main(void) 
 {
-    // Initialize minimal hardware
     vga_init();
     vga_puts("KernelGPT: Booted.\n");
     

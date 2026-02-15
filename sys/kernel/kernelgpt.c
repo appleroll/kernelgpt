@@ -3,19 +3,18 @@
 #include "math.h"
 #include "heap/heap.h"
 #include "print/debug.h"
-#include "names.h" // Generated header with names_txt
-
-// --- Helper Utilities ---
+#include "names.h"
 
 double cos(double x);
 
-// Simple Linear Congruential Generator for randomness
+// Linear Congruential Generator
 static unsigned long int next = 1;
 void mysrand(unsigned int seed) { next = seed; }
 int myrand(void) {
     next = next * 1103515245 + 12345;
     return (unsigned int)(next / 65536) % 32768;
 }
+
 double random_uniform() { return (double)myrand() / 32768.0; }
 double random_gauss(double mu, double sigma) {
     // Box-Muller transform
@@ -27,7 +26,6 @@ double random_gauss(double mu, double sigma) {
 }
 double cos(double x) {
     // Taylor series for cos(x) approx
-    // sufficient for random_gauss
     double term = 1;
     double sum = 1;
     double x2 = x * x;
@@ -38,7 +36,7 @@ double cos(double x) {
     return sum;
 }
 
-// --- Dynamic Array (List) Implementation for C ---
+// List implementation
 typedef struct {
     void** items;
     int capacity;
@@ -64,15 +62,13 @@ void list_free(List* l) {
     kfree(l);
 }
 
-// --- Arena Allocator for Computation Graph ---
-// We use this to allocate Value nodes during forward pass efficiently 
-// and free them all at once after backward pass.
+// Arena allocator for autograd graph nodes - we will reset it after each training iteration
 #define ARENA_SIZE (8 * 1024 * 1024) // 8MB arena
 static char* arena_buffer = NULL;
 static size_t arena_offset = 0;
 
 void arena_init() {
-    vga_puts("Allocating Arena (8MB)...\n");
+
     arena_buffer = (char*)kmalloc(ARENA_SIZE);
     if (!arena_buffer) {
         vga_puts("PANIC: Failed to allocate Arena!\n");
@@ -104,9 +100,6 @@ struct Value {
     double grad;
     Value* children[2]; // Max 2 children for binary ops
     int num_children;
-    // We don't need explicit local_grads stored, we can compute them or store them
-    // Simpler: store op type and use that to compute backward?
-    // Karpathy's code stores local gradients.
     double local_grads[2]; 
     // To support topological sort easily:
     int visited; 
@@ -122,7 +115,6 @@ Value* value_create(double data) {
     return v;
 }
 
-// Helper for parameters that stick around - allocate on HEAP not ARENA
 Value* param_create(double data) {
     Value* v = (Value*)kmalloc(sizeof(Value)); // Persist on heap
     if (!v) {
@@ -186,7 +178,6 @@ Value* relu(Value* a) {
 }
 
 // Topological Sort & Backward
-// Using a static array for topo sort to avoid recursion depth issues or malloc
 #define MAX_NODES 100000 
 static Value* topo[MAX_NODES];
 static int topo_idx = 0;
@@ -203,21 +194,6 @@ void build_topo(Value* v) {
 
 void backward(Value* root) {
     topo_idx = 0;
-    // Reset visited flags? No, assume nodes are fresh from arena.
-    // But params are reused. So we must reset visited on params?
-    // The graph is DAG. Params are leaves usually. 
-    // Wait, params are reused across steps, but in THIS graph they are leaves.
-    // If I reuse params, I need to unmark them after backward? 
-    // Or just use a different visited marker (like a generation ID).
-    // Simple: use generation ID? Or just reset visited.
-    // Since arena is reset, all intermediate nodes are gone. 
-    // Only PARAMS persist. So I just need to clear visited on params.
-    // Actually, build_topo sets visited=1. I can clear it later.
-    
-    // Hack: Since build_topo only traverses children, and params are leaves or roots of prev graph?
-    // In this fresh graph (from forward pass), params are inputs.
-    // We need to ensure we don't visit the same node twice.
-    // After backward, we can traverse topo list and reset visited = 0.
     
     build_topo(root);
     
@@ -237,8 +213,8 @@ void backward(Value* root) {
     }
 }
 
-// --- Matrix/Neural Net Ops ---
-// We won't use full matrix struct, just array of Values
+// Matrix 
+// I don't think NanoGPT uses Matrixes, but I think matrixes are pretty cool and a good thing to have.
 typedef struct {
     int rows;
     int cols;
@@ -255,6 +231,7 @@ Matrix matrix_create(int rows, int cols) {
     }
     return mat;
 }
+
 // Init random matrix (Parameters)
 void matrix_init_randn(Matrix mat, double std) {
     for(int i=0; i<mat.rows; i++) {
@@ -271,8 +248,6 @@ void matrix_init_zeros(Matrix mat) {
     }
 }
 
-// Matrix-Vector Multiply: y = Wx
-// x is array of Value*, W is Matrix
 Value** matmul_vec(Matrix W, Value** x) {
     Value** out = (Value**)arena_alloc(W.rows * sizeof(Value*));
     for(int i=0; i<W.rows; i++) {
@@ -285,20 +260,16 @@ Value** matmul_vec(Matrix W, Value** x) {
     return out;
 }
 
-// --- NanoGPT Specifics ---
-
 #define BLOCK_SIZE 16
 #define N_EMBD 16
 #define N_HEAD 4
 #define N_LAYER 1
 #define HEAD_DIM (N_EMBD / N_HEAD)
-#define VOCAB_SIZE 65 // Approximate, will calculate
+#define VOCAB_SIZE 65 // will calculate
 
-// Globals for Model
 Matrix wte;
 Matrix wpe;
 Matrix lm_head;
-// Layer 0 params (hardcoded N_LAYER=1 for simplicity in C port)
 Matrix attn_wq, attn_wk, attn_wv, attn_wo;
 Matrix mlp_fc1, mlp_fc2;
 
@@ -365,40 +336,21 @@ Value** softmax(Value** logits, int n) {
     return probs;
 }
 
-// GPT Forward Pass simplified for 1 layer, returns logits
-// token_id: current token
-// pos_id: current pos
-// k_cache, v_cache: arrays to store past keys/values. 
-// For training, we act simply. C implementation usually processes sequence.
-// Python implementation: gpt(token_id, pos_id, keys, values) called PER TOKEN.
-// We will mimic receiving arrays of previous keys/values?
-// Actually the python Code re-computes or accumulates.
-// `keys[li].append(k)` -> It appends.
-// So we need a cache.
-
-// Cache structure: Layer -> Head -> Sequence -> Dim
-// Simplified: Layer 0 only.
-// keys_param[seq_len][N_EMBD].
 Value*** keys_cache; // [BLOCK_SIZE][N_EMBD]
 Value*** values_cache;
 
 void init_cache() {
     keys_cache = (Value***)kmalloc(BLOCK_SIZE * sizeof(Value**));
     values_cache = (Value***)kmalloc(BLOCK_SIZE * sizeof(Value**));
-    // Allocation happens per step
 }
 
-// Returns logits (vocab_size)
 Value** gpt(int token_id, int pos_id) {
-    // defaults
-    
-    // Token + Pos Embedding
     Value** tok_emb = wte.m[token_id];
     Value** pos_emb = wpe.m[pos_id];
     Value** x = (Value**)arena_alloc(N_EMBD * sizeof(Value*));
     for(int i=0; i<N_EMBD; i++) x[i] = add(tok_emb[i], pos_emb[i]);
     
-    // -- Layer 0 --
+    // Layer 0
     Value** x_residual = x;
     x = rmsnorm(x, N_EMBD);
     
@@ -456,7 +408,7 @@ Value** gpt(int token_id, int pos_id) {
     x = matmul_vec(attn_wo, x_attn);
     for(int i=0; i<N_EMBD; i++) x[i] = add(x[i], x_residual[i]);
     
-    // -- MLP Block --
+    // MLP block
     x_residual = x;
     x = rmsnorm(x, N_EMBD);
     x = matmul_vec(mlp_fc1, x);
@@ -464,18 +416,12 @@ Value** gpt(int token_id, int pos_id) {
     x = matmul_vec(mlp_fc2, x);
     for(int i=0; i<N_EMBD; i++) x[i] = add(x[i], x_residual[i]);
     
-    // -- LM Head --
-    // We don't rmsnorm here in nanogpt.py?
-    // "logits = linear(x, state_dict['lm_head'])"
-    // Wait, python code does NOT rmsnorm before lm_head. But GPT-2 usually does.
-    // Following python code exactly:
+    // LM head
     Value** logits = matmul_vec(lm_head, x);
     return logits;
 }
 
-// --- Training Loop ---
-
-// Adam Optimizer state
+// "let there be Adam" - Karpathy
 double* m;
 double* v_mom; 
 void init_optimizer() {
@@ -529,7 +475,7 @@ void kernelgpt_main() {
     init_cache(); // allocate pointers
     
     vga_puts("Processing Dataset...\n");
-    // Parse names.txt (names_txt global)
+
     // Build vocab
     char uchar_temp[256] = {0};
     for(unsigned int i=0; i<names_txt_len; i++) {
@@ -537,13 +483,7 @@ void kernelgpt_main() {
     }
     // Collect unique
     int u_count = 0;
-    // We treat \n as a separator?
-    // In nanogpt.py: "uchars = sorted(set(''.join(docs)))"
-    // Newlines are stripped from docs.
-    // But then: "tokens = [BOS] + [uchars.index(ch) for ch in doc] + [BOS]"
-    // It trains on documents.
-    // We will treat \n as a delimiter and everything else as chars.
-    // uchars does not include \n in python code.
+
     for(int c=0; c<256; c++) {
         if(uchar_temp[c] && c != '\n') u_count++;
     }
@@ -563,22 +503,18 @@ void kernelgpt_main() {
     
     vga_puts("Training...\n");
     
-    // Parse docs into tokens
-    // We'll just stream docs from the blob
     int doc_start = 0;
     int step = 0;
     int total_docs = 0;
-    
-    // Training Loop
-    // 50 Steps for demo
+
+    // Traning loop. 
+    // @todo - increase steps?
     for(step = 0; step < 50; step++) {
         arena_reset();
         
-        // Get next doc
         int doc_end = doc_start;
         while(doc_end < names_txt_len && names_txt[doc_end] != '\n') doc_end++;
         
-        // Tokenize
         int doc_len = doc_end - doc_start;
         if(doc_len <= 0) { // skip empty lines
              doc_start = doc_end + 1;
@@ -625,25 +561,13 @@ void kernelgpt_main() {
     
     // Inference
     for(int i=0; i<10; i++) {
-        arena_reset(); // Reset arena for inference
+        arena_reset();
         int token = BOS;
         vga_printf("Name %d: ", i+1);
         for(int pos=0; pos<BLOCK_SIZE; pos++) {
-            // Forward pass for ONE token
-            // Note: our GPT forward implementation populates the cache for 'pos'
-            // We need to keep the cache persistent during one inference sequence
-            // But we reset arena... oops.
-            // CACHE IS IN 'keys_cache' which are pointers to Values.
-            // If Values are in arena, and we reset arena, cache is invalid.
-            // Solution: For inference, we can't reset arena between tokens easily.
-            // Or we must copy cache out?
-            // Actually, arena is 8MB. One sequence is tiny. We can just NOT reset arena inside the generation loop.
-            // Reset arena only before starting a name.
             
             Value** logits = gpt(token, pos);
             Value** probs = softmax(logits, vocab_sz);
-            
-            // Sample
             double r = random_uniform();
             double cdf = 0.0;
             int next_token = 0;
