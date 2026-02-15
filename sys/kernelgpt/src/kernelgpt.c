@@ -55,7 +55,7 @@ void kernelgpt_main(void) {
     int doc_start = 0;
     int step = 0;
 
-    // Traning loop. 
+    // Training loop. 
     for(step = 0; step < gpt_config.max_steps; step++) {
         arena_reset();
         
