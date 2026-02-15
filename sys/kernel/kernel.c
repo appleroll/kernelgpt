@@ -10,7 +10,7 @@
 #include "heap/heap.h"
 #include "idt/idt.h"
 #include "isr/isr.h"
-#include "kernelgpt.h"
+#include "kernelgpt/kernelgpt.h"
 #include "print/debug.h"
 
 void enable_fpu() {
@@ -32,22 +32,22 @@ void enable_fpu() {
 void kernel_main(void) 
 {
     vga_init();
-    vga_puts("KernelGPT: Booted.\n");
+    vga_puts("[KGPT] Booted.\n");
     
     // Enable FPU for float math
     enable_fpu();
-    vga_puts("KernelGPT: FPU Enabled.\n");
+    vga_puts("[KGPT] FPU Enabled.\n");
 
     paging_init(16 * 1024 * 1024);
-    vga_puts("KernelGPT: Paging Enabled.\n");
+    vga_puts("[KGPT] Paging Enabled.\n");
 
     idt_init();
     isr_init();
     asm volatile("sti"); // Enable interrupts
-    vga_puts("KernelGPT: Interrupts Enabled.\n");
+    vga_puts("[KGPT] Interrupts Enabled.\n");
     
     // Run the GPT
-    vga_puts("KernelGPT: Starting Training & Inference...\n\n");
+    vga_puts("[KGPT] Starting Training & Inference...\n\n");
     kernelgpt_main();
     
     // Halt
