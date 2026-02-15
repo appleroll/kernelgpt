@@ -1,0 +1,6 @@
+nasm
+i686-elf-grub
+x86_64-elf-gcc
+x86_64-elf-binutils
+xorriso
+qemu
