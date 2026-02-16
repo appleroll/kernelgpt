@@ -6,6 +6,13 @@ It boots a heavily modified vesion of [MooseOS](https://github.com/appleroll/moo
 
 It is heavily inspired off Andrej Karpathy's [MicroGPT](https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95).
 
+## Design
+KernelGPT takes MooseOS's source code, and removes unneeded functions like filesystems, ATA support, GUI, etc, leaving only a mostly bare-bones kernel. KernelGPT sits directly inside the kernel.
+
+Inspiration for the LLM design choice was taken from Andrej Karpathy's MicroGPT. This meant implementation for a GPT-2 style LLM, while keeping Karpathy's choice of switching Layernorm for RMSNorm and GELU for ReLU. To merge the AI into MooseOS, KernelGPT uses an arena allocator for easy memory allocation, and initialises the FPU for floating-point arithmetic.
+
+MicroGPT’s `names.txt` was converted into a C header before runtime so KernelGPT can access the vocabulary directly in memory, avoiding any filesystem dependencies.”
+
 ## Usage
 
 To run the project, simply do
