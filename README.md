@@ -1,4 +1,4 @@
-# KernelGPT
+![KernelGPT Banner](res/banner.png)
 
 **KernelGPT** is a from-scratch implementation of a GPT (Generative Pre-trained Transformer) written in pure C, running directly on bare metal x86 hardware.
 
