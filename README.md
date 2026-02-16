@@ -7,7 +7,6 @@ It boots a heavily modified vesion of [MooseOS](https://github.com/appleroll/moo
 It is heavily inspired off Andrej Karpathy's [MicroGPT](https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95).
 
 ## Usage
-Since this is a modified version of MooseOS, please check its [README](https://github.com/appleroll/moose-os/blob/main/README.md) for the usage guide.
 
 To run the project, simply do
 ```shell
@@ -15,11 +14,8 @@ cd kernelgpt/
 make run
 ```
 
-You would need:
-1. QEMU
-2. NASM
-3. Linux Binutils, or some port of it.
-4. GRUB
+You would need QEMU to run the project. Since this is a modified version of MooseOS, please check its [README](https://github.com/appleroll/moose-os/blob/main/README.md) for the comprehensive usage guide.
+
 
 For my fellow Mac users, I have provided a `brew.txt` with the packages you need to install.
 
