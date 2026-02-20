@@ -11,7 +11,7 @@ KernelGPT takes MooseOS's source code, and removes unneeded functions like files
 
 Inspiration for the LLM design choice was taken from Andrej Karpathy's MicroGPT. This meant implementation for a GPT-2 style LLM, while keeping Karpathy's choice of switching Layernorm for RMSNorm and GELU for ReLU. To merge the AI into MooseOS, KernelGPT uses an arena allocator for easy memory allocation, and initialises the FPU for floating-point arithmetic.
 
-MicroGPT’s `names.txt` was converted into a C header before runtime so KernelGPT can access the vocabulary directly in memory, avoiding any filesystem dependencies.”
+MicroGPT’s `names.txt` was converted into a C header before runtime so KernelGPT can access the vocabulary directly in memory, avoiding any filesystem dependencies.
 
 ## Usage
 
